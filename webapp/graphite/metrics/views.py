@@ -51,25 +51,33 @@ def do_walk_rrd_dirs(start_path, matches=None):
 
 def index_json(request):
   jsonp = request.REQUEST.get('jsonp', False)
-  matches = []
 
-  for root, dirs, files in os.walk(settings.WHISPER_DIR):
-    root = root.replace(settings.WHISPER_DIR, '')
-    for basename in files:
-      if fnmatch.fnmatch(basename, '*.wsp'):
-        matches.append(os.path.join(root, basename))
+  def find_local_matches():
+    matches = []
 
-  for match in do_walk_rrd_dirs(settings.RRD_DIR):
-    matches.append(match)
+    for root, dirs, files in os.walk(settings.WHISPER_DIR):
+      root = root.replace(settings.WHISPER_DIR, '')
+      for basename in files:
+        if fnmatch.fnmatch(basename, '*.wsp'):
+          matches.append(os.path.join(root, basename))
 
-  matches = [
-    m
-    .replace('.wsp', '')
-    .replace('.rrd', '')
-    .replace('/', '.')
-    .lstrip('.')
-    for m in sorted(matches)
-  ]
+    for match in do_walk_rrd_dirs(settings.RRD_DIR):
+      matches.append(match)
+
+    matches = [
+      m
+      .replace('.wsp', '')
+      .replace('.rrd', '')
+      .replace('/', '.')
+      .lstrip('.')
+      for m in sorted(matches)
+    ]
+    return matches
+
+  if len(settings.CLUSTER_SERVERS) > 1:
+    matches = STORE.index()
+  else:
+    matches = find_local_matches()
   return json_response_for(request, matches, jsonp=jsonp)
 
 

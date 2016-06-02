@@ -26,11 +26,71 @@ class RemoteStore(object):
     else:
       return request
 
+  def index(self, result_queue=False):
+    request = IndexRequest(self)
+    request.send()
+    if result_queue:
+      result_queue.put(request)
+    else:
+      return request
 
   def fail(self):
     self.lastFailure = time.time()
 
 
+class IndexRequest:
+  suppressErrors = True
+
+  def __init__(self, store):
+    self.store = store
+    self.connection = None
+    self.cacheKey = compactHash('index:%s' % self.store.host)
+    self.cachedResults = None
+
+
+  def send(self):
+    self.cachedResults = cache.get(self.cacheKey)
+
+    if self.cachedResults:
+      return
+
+    self.connection = HTTPConnectionWithTimeout(self.store.host)
+    self.connection.timeout = settings.REMOTE_STORE_FIND_TIMEOUT
+
+    try:
+      self.connection.request('GET', '/metrics/index.json')
+    except:
+      self.store.fail()
+      if not self.suppressErrors:
+        raise
+
+
+  def get_results(self):
+    if self.cachedResults:
+      return self.cachedResults
+
+    if not self.connection:
+      self.send()
+
+    try:  # Python 2.7+, use buffering of HTTP responses
+      response = self.connection.getresponse(buffering=True)
+    except TypeError:  # Python 2.6 and older
+      response = self.connection.getresponse()
+
+    try:
+      assert response.status == 200, "received error response %s - %s" % (response.status, response.reason)
+      result_data = response.read()
+      results = unpickle.loads(result_data)
+    except:
+      self.store.fail()
+      if not self.suppressErrors:
+        raise
+      else:
+        results = []
+
+    cache.set(self.cacheKey, results, settings.REMOTE_FIND_CACHE_DURATION)
+    self.cachedResults = results
+    return results
 
 class FindRequest:
   suppressErrors = True

@@ -102,7 +102,7 @@ class Store:
     results = []
     result_queue = Queue.Queue()
     for store in [ r for r in self.remote_stores if r.available ]:
-      thread = threading.Thread(target=store.index, args=(result_queue))
+      thread = threading.Thread(target=store.index, args=(result_queue,))
       thread.start()
       remote_indexes.append(thread)
 

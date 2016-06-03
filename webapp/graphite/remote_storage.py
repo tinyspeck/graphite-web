@@ -29,10 +29,11 @@ class RemoteStore(object):
   def index(self, result_queue=False):
     request = IndexRequest(self)
     request.send()
+    results = request.get_results()
     if result_queue:
-      result_queue.put(request)
+      result_queue.put(results)
     else:
-      return request
+      return results
 
   def fail(self):
     self.lastFailure = time.time()
@@ -80,7 +81,7 @@ class IndexRequest:
     try:
       assert response.status == 200, "received error response %s - %s" % (response.status, response.reason)
       result_data = response.read()
-      results = unpickle.loads(result_data)
+      results = json.loads(result_data)
     except:
       self.store.fail()
       if not self.suppressErrors:

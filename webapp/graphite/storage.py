@@ -63,14 +63,8 @@ class Store:
 
 
   def index(self):
-    found = set()
-    remote_requests = self._parallel_remote_index()
-
-    for request in remote_requests:
-      for metric in request.get_results():
-        found.add(metric)
-
-    return sorted(found)
+    results = self._parallel_remote_index()
+    return sorted(set(results))
 
 
   def _parallel_remote_find(self, query):
@@ -106,21 +100,18 @@ class Store:
       thread.start()
       remote_indexes.append(thread)
 
-    # same caveats as in datalib fetchData
     for thread in remote_indexes:
       try:
-        thread.join(settings.REMOTE_STORE_FIND_TIMEOUT)
+        thread.join(10)
       except:
         log.exception("Failed to join remote index thread within %ss" % (settings.REMOTE_STORE_FIND_TIMEOUT))
 
     while not result_queue.empty():
       try:
-        results.append(result_queue.get_nowait())
+        results += result_queue.get_nowait()
       except Queue.Empty:
-        log.exception("result_queue not empty, but unable to retrieve results")
 
     return results
-
     
   def find_first(self, query):
     # Search locally first

@@ -53,26 +53,9 @@ def index_json(request):
   jsonp = request.REQUEST.get('jsonp', False)
 
   def find_local_matches():
-    matches = []
-
-    for root, dirs, files in os.walk(settings.WHISPER_DIR):
-      root = root.replace(settings.WHISPER_DIR, '')
-      for basename in files:
-        if fnmatch.fnmatch(basename, '*.wsp'):
-          matches.append(os.path.join(root, basename))
-
-    for match in do_walk_rrd_dirs(settings.RRD_DIR):
-      matches.append(match)
-
-    matches = [
-      m
-      .replace('.wsp', '')
-      .replace('.rrd', '')
-      .replace('/', '.')
-      .lstrip('.')
-      for m in sorted(matches)
-    ]
-    return matches
+    with open(settings.INDEX_FILE, 'r') as f:
+      index = set([line.strip() for line in f if line])
+      return sorted(index)
 
   if len(settings.CLUSTER_SERVERS) > 1:
     matches = STORE.index()

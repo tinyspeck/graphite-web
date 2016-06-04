@@ -9,6 +9,8 @@ from graphite.logger import log
 from graphite.remote_storage import RemoteStore
 from graphite.util import unpickle
 
+from multiprocessing import Pool
+
 try:
   import rrdtool
 except ImportError:
@@ -28,6 +30,11 @@ except ImportError:
 DATASOURCE_DELIMETER = '::RRD_DATASOURCE::'
 
 
+def get_results(store):
+  return store.index_map()
+
+def set_cache_key(result):
+  cache.set(result[0], result[1], settings.REMOTE_FIND_CACHE_DURATION)
 
 class Store:
   def __init__(self, directories=[], remote_hosts=[]):
@@ -63,8 +70,18 @@ class Store:
 
 
   def index(self):
-    results = self._parallel_remote_index()
-    return sorted(set(results))
+    p = Pool(processes=len(self.remote_stores))
+    # Returns tuple of (cache_key, results)
+    results = p.map(get_results, self.remote_stores)
+
+    # Don't block on writing to cache
+    p2 = Pool(processes=1)
+    p2.apply_async(set_cache_key, results)
+
+    metrics = [result[1] for result in results]
+    metrics = set(reduce(lambda x, y: x + y, metrics))
+    metrics = sorted(metrics)
+    return metrics
 
 
   def _parallel_remote_find(self, query):
@@ -88,28 +105,6 @@ class Store:
         results.append(result_queue.get_nowait())
       except Queue.Empty:
         log.exception("result_queue not empty, but unable to retrieve results")
-
-    return results
-
-  def _parallel_remote_index(self):
-    remote_indexes = []
-    results = []
-    result_queue = Queue.Queue()
-    for store in [ r for r in self.remote_stores if r.available ]:
-      thread = threading.Thread(target=store.index, args=(result_queue,))
-      thread.start()
-      remote_indexes.append(thread)
-
-    for thread in remote_indexes:
-      try:
-        thread.join(10)
-      except:
-        log.exception("Failed to join remote index thread within %ss" % (settings.REMOTE_STORE_FIND_TIMEOUT))
-
-    while not result_queue.empty():
-      try:
-        results += result_queue.get_nowait()
-      except Queue.Empty:
 
     return results
     

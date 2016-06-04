@@ -28,12 +28,8 @@ class RemoteStore(object):
 
   def index(self, result_queue=False):
     request = IndexRequest(self)
-    request.send()
     results = request.get_results()
-    if result_queue:
-      result_queue.put(results)
-    else:
-      return results
+    return results
 
   def fail(self):
     self.lastFailure = time.time()
@@ -89,9 +85,8 @@ class IndexRequest:
       else:
         results = []
 
-    cache.set(self.cacheKey, results, settings.REMOTE_FIND_CACHE_DURATION)
     self.cachedResults = results
-    return results
+    return self.cacheKey, results
 
 class FindRequest:
   suppressErrors = True

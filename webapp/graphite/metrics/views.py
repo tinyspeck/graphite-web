@@ -51,13 +51,14 @@ def do_walk_rrd_dirs(start_path, matches=None):
 
 def index_json(request):
   jsonp = request.REQUEST.get('jsonp', False)
+  local = request.REQUEST.get('local', False)
 
   def find_local_matches():
     with open(settings.INDEX_FILE, 'r') as f:
       index = set([line.strip() for line in f if line])
       return sorted(index)
 
-  if len(settings.CLUSTER_SERVERS) > 1:
+  if len(settings.CLUSTER_SERVERS) > 1 and not local:
     matches = STORE.index()
   else:
     matches = find_local_matches()

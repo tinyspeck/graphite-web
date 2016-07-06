@@ -1596,7 +1596,10 @@ def removeAbovePercentile(requestContext, seriesList, n):
   for s in seriesList:
     s.name = 'removeAbovePercentile(%s, %d)' % (s.name, n)
     s.pathExpression = s.name
-    percentile = nPercentile(requestContext, [s], n)[0][0]
+    try:
+      percentile = nPercentile(requestContext, [s], n)[0][0]
+    except IndexError:
+      continue
     for (index, val) in enumerate(s):
       if val > percentile:
         s[index] = None
@@ -1625,7 +1628,10 @@ def removeBelowPercentile(requestContext, seriesList, n):
   for s in seriesList:
     s.name = 'removeBelowPercentile(%s, %d)' % (s.name, n)
     s.pathExpression = s.name
-    percentile = nPercentile(requestContext, [s], n)[0][0]
+    try:
+      percentile = nPercentile(requestContext, [s], n)[0][0]
+    except IndexError:
+      continue
     for (index, val) in enumerate(s):
       if val < percentile:
         s[index] = None
@@ -1663,16 +1669,28 @@ def limit(requestContext, seriesList, n):
   """
   return seriesList[0:n]
 
-def sortByName(requestContext, seriesList):
+def sortByName(requestContext, seriesList, natural = False):
   """
   Takes one metric or a wildcard seriesList.
-
-  Sorts the list of metrics by the metric name.
+  Sorts the list of metrics by the metric name using either alphabetical order or natural sorting.
+  Natural sorting allows names containing numbers to be sorted more naturally, e.g:
+  - Alphabetical sorting: server1, server11, server12, server2
+  - Natural sorting: server1, server2, server11, server12
   """
-  def compare(x,y):
+  def paddedName(name):
+    return re.sub("(\d+)", lambda x: "{0:010}".format(int(x.group(0))), name)
+
+  def compare(x, y):
     return cmp(x.name, y.name)
 
-  seriesList.sort(compare)
+  def natSortCompare(x, y):
+    return cmp(paddedName(x.name), paddedName(y.name))
+
+  if natural:
+    seriesList.sort(natSortCompare)
+  else:
+    seriesList.sort(compare)
+
   return seriesList
 
 def sortByMaxima(requestContext, seriesList):

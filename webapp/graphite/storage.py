@@ -9,6 +9,8 @@ from graphite.logger import log
 from graphite.remote_storage import RemoteStore
 from graphite.util import unpickle
 
+from multiprocessing import Pool
+
 try:
   import rrdtool
 except ImportError:
@@ -28,6 +30,11 @@ except ImportError:
 DATASOURCE_DELIMETER = '::RRD_DATASOURCE::'
 
 
+def get_results(store):
+  return store.index_map()
+
+def set_cache_key(result):
+  cache.set(result[0], result[1], settings.REMOTE_FIND_CACHE_DURATION)
 
 class Store:
   def __init__(self, directories=[], remote_hosts=[]):
@@ -60,6 +67,21 @@ class Store:
 
       if match is not None:
         yield match
+
+
+  def index(self):
+    p = Pool(processes=len(self.remote_stores))
+    # Returns tuple of (cache_key, results)
+    results = p.map(get_results, self.remote_stores)
+
+    # Don't block on writing to cache
+    p2 = Pool(processes=1)
+    p2.apply_async(set_cache_key, results)
+
+    metrics = [result[1] for result in results]
+    metrics = set(reduce(lambda x, y: x + y, metrics))
+    metrics = sorted(metrics)
+    return metrics
 
 
   def _parallel_remote_find(self, query):
